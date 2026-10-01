@@ -1,8 +1,9 @@
 FROM node:20-bookworm-slim
 
-# Install system dependencies: python3, ffmpeg, curl and yt-dlp
+# Install system dependencies: python3, python-is-python3, ffmpeg, curl and yt-dlp
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
+    python-is-python3 \
     ffmpeg \
     curl \
     ca-certificates \

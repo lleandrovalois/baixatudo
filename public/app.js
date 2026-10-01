@@ -77,24 +77,29 @@ document.addEventListener('DOMContentLoaded', () => {
     hideError();
   });
 
-  // Paste from clipboard
+  // Paste from clipboard with fallback for HTTP (non-secure context)
   btnPasteClipboard.addEventListener('click', async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && text.trim()) {
-        videoUrlInput.value = text.trim();
-        btnClearInput.style.display = 'flex';
-        hideError();
-        showToast('Link colado da área de transferência!', 'success');
-        analyzeVideo();
-      } else {
-        showToast('Área de transferência vazia.', 'error');
+    if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          videoUrlInput.value = text.trim();
+          btnClearInput.style.display = 'flex';
+          hideError();
+          showToast('Link colado da área de transferência!', 'success');
+          analyzeVideo();
+          return;
+        } else {
+          showToast('Área de transferência vazia.', 'error');
+          return;
+        }
+      } catch (err) {
+        console.warn('Clipboard read error:', err);
       }
-    } catch (err) {
-      console.warn('Clipboard read failed:', err);
-      videoUrlInput.focus();
-      showToast('Permissão de colar negada. Cole com Ctrl+V.', 'error');
     }
+    videoUrlInput.focus();
+    videoUrlInput.select();
+    showToast('Navegador bloqueou colar via HTTP sem SSL. Pressione Ctrl+V no campo.', 'error');
   });
 
   // Submit analyze
@@ -187,7 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao analisar o vídeo.');
+        const detailMsg = data.details ? ` - ${data.details}` : '';
+        throw new Error((data.error || 'Erro ao analisar o vídeo.') + detailMsg);
       }
 
       currentVideoData = data;

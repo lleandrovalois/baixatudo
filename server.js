@@ -16,11 +16,15 @@ const isWindows = process.platform === 'win32';
 const BIN_DIR = path.join(__dirname, 'bin');
 const DOWNLOADS_DIR = path.join(__dirname, 'downloads');
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 function getYtdlpPath() {
   const localWin = path.join(BIN_DIR, 'yt-dlp.exe');
   const localLinux = path.join(BIN_DIR, 'yt-dlp');
   if (isWindows && fs.existsSync(localWin)) return localWin;
   if (!isWindows && fs.existsSync(localLinux)) return localLinux;
+  if (fs.existsSync('/usr/local/bin/yt-dlp')) return '/usr/local/bin/yt-dlp';
+  if (fs.existsSync('/usr/bin/yt-dlp')) return '/usr/bin/yt-dlp';
   return 'yt-dlp';
 }
 
@@ -34,6 +38,24 @@ function getFfmpegArgs() {
     return ['--ffmpeg-location', BIN_DIR];
   }
   return [];
+}
+
+function getBaseYtdlpArgs() {
+  const args = [
+    '--no-playlist',
+    '--geo-bypass',
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    '--extractor-args', 'youtube:player_client=ios,android,web',
+    ...getFfmpegArgs()
+  ];
+
+  // Optional cookies support for Datacenter / VPS IPs
+  const cookiesPath = path.join(__dirname, 'cookies.txt');
+  if (fs.existsSync(cookiesPath)) {
+    args.push('--cookies', cookiesPath);
+  }
+
+  return args;
 }
 
 if (!fs.existsSync(DOWNLOADS_DIR)) {
@@ -107,9 +129,7 @@ app.post('/api/info', async (req, res) => {
   const args = [
     '--dump-single-json',
     '--skip-download',
-    '--no-playlist',
-    ...getFfmpegArgs(),
-    '--js-runtimes', `node:${process.execPath}`,
+    ...getBaseYtdlpArgs(),
     url.trim()
   ];
 
@@ -135,8 +155,19 @@ app.post('/api/info', async (req, res) => {
         errorMsg = 'Vídeo indisponível ou excluído no YouTube.';
       } else if (stderrData.includes('Sign in to confirm your age')) {
         errorMsg = 'Este vídeo requer confirmação de idade no YouTube.';
+      } else if (stderrData.includes('Sign in to confirm you’re not a bot') || stderrData.includes('bot')) {
+        errorMsg = 'O YouTube bloqueou temporariamente o IP do servidor (Detecção de Bot da VPS).';
+      } else if (stderrData.includes('429')) {
+        errorMsg = 'Muitas requisições ao YouTube (HTTP 429). Aguarde alguns instantes.';
       }
-      return res.status(500).json({ error: errorMsg, details: stderrData.slice(0, 300) });
+
+      const cleanDetails = stderrData
+        .split(/[\r\n]+/)
+        .filter(l => l.includes('ERROR:') || l.includes('WARNING:'))
+        .slice(-2)
+        .join(' | ') || stderrData.slice(0, 300);
+
+      return res.status(500).json({ error: errorMsg, details: cleanDetails });
     }
 
     try {
@@ -240,9 +271,7 @@ app.post('/api/download', (req, res) => {
   }
 
   const args = [
-    ...getFfmpegArgs(),
-    '--js-runtimes', `node:${process.execPath}`,
-    '--no-playlist',
+    ...getBaseYtdlpArgs(),
     '--newline',
     '--progress',
     '--no-mtime',
@@ -518,7 +547,7 @@ app.get('/api/history', (req, res) => {
   try {
     const files = fs.readdirSync(DOWNLOADS_DIR);
     const history = files
-      .filter(name => !name.endsWith('.part') && !name.endsWith('.ytdl') && !/\.f\d+\./.test(name))
+      .filter(name => !name.startsWith('.') && !name.endsWith('.part') && !name.endsWith('.ytdl') && !/\.f\d+\./.test(name))
       .map(name => {
         const fullPath = path.join(DOWNLOADS_DIR, name);
         const stats = fs.statSync(fullPath);
