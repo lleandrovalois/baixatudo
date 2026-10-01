@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Downloaded media files
+downloads/*
+!downloads/.gitkeep
+
+# Windows portable binaries (Linux installs them natively via Dockerfile)
+bin/*.exe
+
+# Logs and temporary files
+*.log
+*.part
+*.ytdl
+.DS_Store
+Thumbs.db

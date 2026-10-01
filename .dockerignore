@@ -1,0 +1,10 @@
+node_modules
+downloads/*
+!downloads/.gitkeep
+bin/*.exe
+.git
+.gitignore
+*.part
+*.ytdl
+.DS_Store
+Thumbs.db

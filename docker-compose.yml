@@ -1,0 +1,12 @@
+services:
+  baixatudo:
+    build: .
+    container_name: baixatudo
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    volumes:
+      - ./downloads:/app/downloads
